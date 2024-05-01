@@ -3,6 +3,8 @@
 namespace RedSnapper\SocialiteProviders\DocCheck\Tests;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Stream;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Two\User;
 use Psr\Http\Message\ResponseInterface;
@@ -34,10 +36,10 @@ class ProviderTest extends TestCase
         $request->setLaravelSession($session);
 
         $basicProfileResponse = $this->mock(ResponseInterface::class);
-        $basicProfileResponse->allows('getBody')->andReturns(json_encode(['uniquekey' => '1','email'=>'web@redsnapper.net']));
+        $basicProfileResponse->allows('getBody')->andReturns(Utils::streamFor(json_encode(['uniquekey' => '1','email'=>'web@redsnapper.net'])));
 
         $accessTokenResponse = $this->mock(ResponseInterface::class);
-        $accessTokenResponse->allows('getBody')->andReturns(json_encode(['access_token' => 'fake-token']));
+        $accessTokenResponse->allows('getBody')->andReturns(Utils::streamFor(json_encode(['access_token' => 'fake-token'])));
 
         $guzzle = $this->mock(Client::class);
         $guzzle->expects('post')->andReturns($accessTokenResponse);
@@ -66,7 +68,7 @@ class ProviderTest extends TestCase
 
 
         $accessTokenResponse = $this->mock(ResponseInterface::class);
-        $accessTokenResponse->allows('getBody')->andReturns(json_encode(['access_token' => 'fake-token']));
+        $accessTokenResponse->allows('getBody')->andReturns(Utils::streamFor(json_encode(['access_token' => 'fake-token'])));
 
         $guzzle = $this->mock(Client::class);
         $guzzle->expects('post')->andReturns($accessTokenResponse);
