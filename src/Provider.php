@@ -3,8 +3,8 @@
 namespace RedSnapper\SocialiteProviders\DocCheck;
 
 use Illuminate\Support\Arr;
+use Laravel\Socialite\Two\User;
 use SocialiteProviders\Manager\OAuth2\AbstractProvider;
-use SocialiteProviders\Manager\OAuth2\User;
 
 class Provider extends AbstractProvider
 {
@@ -16,19 +16,18 @@ class Provider extends AbstractProvider
     protected function getAuthUrl($state)
     {
         return $this->buildAuthUrlFromBase(
-          'https://login.doccheck.com/code/',
-          $state
+            'https://login.doccheck.com/code/',
+            $state
         );
     }
 
     protected function getCodeFields($state = null)
     {
-
         $fields = [
-          'dc_client_id' => $this->clientId,
-          'dc_template' => 'fullscreen_dc',
-          'redirect_uri' => $this->redirectUrl,
-          'state' => $state
+            'dc_client_id' => $this->clientId,
+            'dc_template'  => 'fullscreen_dc',
+            'redirect_uri' => $this->redirectUrl,
+            'state'        => $state,
         ];
 
         return array_merge($fields, $this->parameters);
@@ -47,21 +46,21 @@ class Provider extends AbstractProvider
         }
 
         $response = $this->getHttpClient()->get('https://login.doccheck.com/service/oauth/user_data/', [
-          'headers' => [
-            'Accept' => 'application/json',
-            'Authorization' => 'Bearer '.$token,
-          ],
+            'headers' => [
+                'Accept'        => 'application/json',
+                'Authorization' => 'Bearer '.$token,
+            ],
         ]);
 
         return json_decode($response->getBody(), true);
     }
 
-    protected function mapUserToObject(array $user)
+    protected function mapUserToObject(array $user): DocCheckUser
     {
-        return (new User())->setRaw($user)->map([
-          'id' => $user['uniquekey'],
-          'name' => Arr::get($user, 'address_name_first')." ".Arr::get($user, 'address_name_last'),
-          'email' => Arr::get($user, 'email'),
+        return (new DocCheckUser())->setRaw($user)->map([
+            'id'    => $user['uniquekey'],
+            'name'  => Arr::get($user, 'address_name_first')." ".Arr::get($user, 'address_name_last'),
+            'email' => Arr::get($user, 'email'),
         ]);
     }
 
