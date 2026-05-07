@@ -48,11 +48,24 @@ protected $listen = [
 
 ### Usage
 
-You should now be able to use the provider like you would regularly use Socialite (assuming you have the facade installed):
+DocCheck's OAuth 2.0 flow requires a language path segment in the authorize URL. Pass it via Socialite's `with()`:
 
 ```php
-return Socialite::driver('doccheck')->redirect();
+return Socialite::driver('doccheck')
+    ->scopes(['name', 'email', 'occupation_detail'])
+    ->with(['lang' => 'de'])
+    ->redirect();
 ```
+
+The package always requests the `unique_id` scope (DocCheck's mandatory system scope). Add any other scopes your application needs via `->scopes([...])`. Available scopes include `name`, `email`, `profession`, `occupation_detail`, `country`, `language`, and `address` — see DocCheck's [scopes documentation](https://docs.doccheck.com/login-access/features/personal.html) for the full list and license requirements. Requested scopes are presented to the user as optional ticks on the consent screen by default; if you need a scope to be **required** rather than optional, add it to the login-client's "Mandatory Scopes" in DocCheck Access.
+
+After authentication, the user payload uses DocCheck's v2 keys (`unique_id`, `first_name`, `last_name`, `email`, `discipline_id`, `profession_id`). Declined optional scopes are simply omitted from the response — the package's accessors return `null` cleanly in that case.
+
+### Upgrading from v1
+
+v2 is a breaking change. v1 endpoints (`login.doccheck.com`) are being decommissioned by DocCheck on 2026-06-01. If your application is not yet ready to migrate, lock to `^1.0` — the `v1.x` tags remain available.
+
+For full breaking-change details, see [CHANGELOG](CHANGELOG.md).
 
 ### Testing
 

@@ -3,51 +3,38 @@
 namespace RedSnapper\SocialiteProviders\DocCheck;
 
 use Illuminate\Support\Arr;
-use Laravel\Socialite\Two\User;
 use SocialiteProviders\Manager\OAuth2\AbstractProvider;
 
 class Provider extends AbstractProvider
 {
-    /**
-     * Unique Provider Identifier.
-     */
     public const IDENTIFIER = 'DOCCHECK';
 
-    protected function getAuthUrl($state)
+    private const BASE_URL = 'https://auth.doccheck.com';
+
+    protected $scopes = ['unique_id'];
+
+    protected $scopeSeparator = ' ';
+
+    protected function getAuthUrl($state): string
     {
+        $lang = Arr::pull($this->parameters, 'lang', 'en');
+
         return $this->buildAuthUrlFromBase(
-            'https://login.doccheck.com/code/',
+            self::BASE_URL.'/'.$lang.'/authorize',
             $state
         );
     }
 
-    protected function getCodeFields($state = null)
+    protected function getTokenUrl(): string
     {
-        $fields = [
-            'dc_client_id' => $this->clientId,
-            'dc_template'  => 'fullscreen_dc',
-            'redirect_uri' => $this->redirectUrl,
-            'state'        => $state,
-        ];
-
-        return array_merge($fields, $this->parameters);
+        return self::BASE_URL.'/token';
     }
 
-    protected function getTokenUrl()
+    protected function getUserByToken($token): array
     {
-        return "https://login.doccheck.com/service/oauth/access_token/";
-    }
-
-    protected function getUserByToken($token)
-    {
-        // User has revoked the token so we can not retrieve user data
-        if ($this->request->input('dc_agreement') == 0) {
-            return ['uniquekey' => $this->request->input('uniquekey')];
-        }
-
-        $response = $this->getHttpClient()->get('https://login.doccheck.com/service/oauth/user_data/', [
+        $response = $this->getHttpClient()->get(self::BASE_URL.'/api/users/data', [
             'headers' => [
-                'Accept'        => 'application/json',
+                'Accept' => 'application/json',
                 'Authorization' => 'Bearer '.$token,
             ],
         ]);
@@ -57,11 +44,12 @@ class Provider extends AbstractProvider
 
     protected function mapUserToObject(array $user): DocCheckUser
     {
+        $name = trim(Arr::get($user, 'first_name', '').' '.Arr::get($user, 'last_name', ''));
+
         return (new DocCheckUser())->setRaw($user)->map([
-            'id'    => $user['uniquekey'],
-            'name'  => Arr::get($user, 'address_name_first')." ".Arr::get($user, 'address_name_last'),
+            'id' => Arr::get($user, 'unique_id'),
+            'name' => $name !== '' ? $name : null,
             'email' => Arr::get($user, 'email'),
         ]);
     }
-
 }
