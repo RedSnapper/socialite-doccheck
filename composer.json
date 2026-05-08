@@ -1,6 +1,6 @@
 {
     "name": "rs/socialite-doccheck",
-    "description": "DocCheck ",
+    "description": "Laravel Socialite provider for DocCheck SSO (OAuth 2.0).",
     "keywords": [
         "rs",
         "doccheck"

@@ -21,7 +21,7 @@ class ProviderTest extends TestCase
 
         $this->assertStringStartsWith('https://auth.doccheck.com/de/authorize?', $url);
         parse_str(parse_url($url, PHP_URL_QUERY), $query);
-        $this->assertSame('client_id', $query['client_id']);
+        $this->assertSame('test-client-id', $query['client_id']);
         $this->assertSame('http://localhost/callback', $query['redirect_uri']);
         $this->assertSame('code', $query['response_type']);
         $this->assertSame('unique_id', $query['scope']);
@@ -131,7 +131,7 @@ class ProviderTest extends TestCase
         }
         $request->setLaravelSession($session);
 
-        return new Provider($request, 'client_id', 'client_secret', 'http://localhost/callback');
+        return new Provider($request, 'test-client-id', 'test-client-secret', 'http://localhost/callback');
     }
 
     private function mockGuzzleForUser(array $userData): Client
@@ -146,7 +146,13 @@ class ProviderTest extends TestCase
 
         $guzzle = $this->mock(Client::class);
         $guzzle->expects('post')->andReturns($accessTokenResponse);
-        $guzzle->expects('get')->andReturns($userResponse);
+        $guzzle->expects('get')
+            ->withArgs(function (string $url, array $options): bool {
+                return $url === 'https://auth.doccheck.com/api/users/data'
+                    && ($options['headers']['Authorization'] ?? null) === 'Bearer fake-token'
+                    && ($options['headers']['Accept'] ?? null) === 'application/json';
+            })
+            ->andReturns($userResponse);
 
         return $guzzle;
     }
