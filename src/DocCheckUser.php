@@ -7,18 +7,13 @@ use SocialiteProviders\Manager\OAuth2\User;
 
 class DocCheckUser extends User
 {
-    public function getOccupationDisciplineId()
+    public function getOccupationDisciplineId(): ?int
     {
-        return Arr::get($this->getRaw(), 'occupation_discipline_id');
+        return Arr::get($this->getRaw(), 'discipline_id');
     }
 
-    public function getOccupationProfessionId()
+    public function getOccupationProfessionId(): ?int
     {
-        return Arr::get($this->getRaw(), 'occupation_profession_id');
-    }
-
-    public function getOccupationProfessionParentId()
-    {
-        return Arr::get($this->getRaw(), 'occupation_profession_parent_id');
+        return Arr::get($this->getRaw(), 'profession_id');
     }
 }

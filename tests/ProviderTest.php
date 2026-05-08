@@ -5,94 +5,155 @@ namespace RedSnapper\SocialiteProviders\DocCheck\Tests;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Request;
-use Laravel\Socialite\Two\User;
+use PHPUnit\Framework\Attributes\Test;
 use Psr\Http\Message\ResponseInterface;
 use RedSnapper\SocialiteProviders\DocCheck\DocCheckUser;
 use RedSnapper\SocialiteProviders\DocCheck\Provider;
 
 class ProviderTest extends TestCase
 {
-    /** @test */
-    public function it_can_get_a_redirect_response()
+    #[Test]
+    public function it_builds_the_authorize_url_with_lang_path_segment(): void
     {
-        $request = new Request();
-        $session = $this->app->make('session')->driver('array');
-        $request->setLaravelSession($session);
+        $provider = $this->makeProvider();
 
-        $provider = new Provider($request, 'client_id', 'client_secret', 'redirect');
+        $url = $provider->with(['lang' => 'de'])->redirect()->getTargetUrl();
 
-        $redirect = $provider->redirect()->getTargetUrl();
-
-        $this->assertStringContainsString("?dc_client_id=client_id", $redirect);
-        $this->assertStringContainsString("redirect_uri=redirect", $redirect);
+        $this->assertStringStartsWith('https://auth.doccheck.com/de/authorize?', $url);
+        parse_str(parse_url($url, PHP_URL_QUERY), $query);
+        $this->assertSame('test-client-id', $query['client_id']);
+        $this->assertSame('http://localhost/callback', $query['redirect_uri']);
+        $this->assertSame('code', $query['response_type']);
+        $this->assertSame('unique_id', $query['scope']);
+        $this->assertNotEmpty($query['state']);
+        $this->assertArrayNotHasKey('lang', $query, 'lang must be a path segment, not a query param');
     }
 
-    /** @test */
-    public function can_retrieve_a_user()
+    #[Test]
+    public function it_defaults_lang_to_en_when_not_provided(): void
     {
-        $request = new Request(['state' => 'state', 'dc_agreement' => 1]);
-        $session = $this->app->make('session')->driver('array');
-        $session->put('state', 'state');
-        $request->setLaravelSession($session);
+        $provider = $this->makeProvider();
 
-        $basicProfileResponse = $this->mock(ResponseInterface::class);
-        $basicProfileResponse->allows('getBody')->andReturns(Utils::streamFor(json_encode([
-            'uniquekey'                       => '1',
-            'email'                           => 'web@redsnapper.net',
-            'occupation_discipline_id'        => 33,
-            'occupation_profession_id'        => 44,
-            'occupation_profession_parent_id' => 55,
-        ])));
+        $url = $provider->redirect()->getTargetUrl();
 
-        $accessTokenResponse = $this->mock(ResponseInterface::class);
-        $accessTokenResponse->allows('getBody')->andReturns(
-            Utils::streamFor(json_encode(['access_token' => 'fake-token']))
-        );
+        $this->assertStringStartsWith('https://auth.doccheck.com/en/authorize?', $url);
+    }
 
-        $guzzle = $this->mock(Client::class);
-        $guzzle->expects('post')->andReturns($accessTokenResponse);
+    #[Test]
+    public function scopes_method_merges_with_default_unique_id(): void
+    {
+        $provider = $this->makeProvider();
 
-        $guzzle->expects('get')->andReturns($basicProfileResponse);
+        $url = $provider->scopes(['name', 'email', 'occupation_detail'])->redirect()->getTargetUrl();
 
-        $provider = new Provider($request, 'client_id', 'client_secret', 'redirect');
+        parse_str(parse_url($url, PHP_URL_QUERY), $query);
+        $this->assertSame('unique_id name email occupation_detail', $query['scope']);
+    }
 
-        $provider->setHttpClient($guzzle);
+    #[Test]
+    public function it_can_retrieve_a_fully_populated_user(): void
+    {
+        $provider = $this->makeProvider(['state' => 'matching-state'], sessionState: 'matching-state');
+        $provider->setHttpClient($this->mockGuzzleForUser([
+            'unique_id' => 'c2533d51-4dfe-4531-bc83-9bf62e1915e3',
+            'first_name' => 'Micha',
+            'last_name' => 'Muster',
+            'email' => 'test@example.com',
+            'discipline_id' => 387,
+            'profession_id' => 100032,
+        ]));
 
         $user = $provider->user();
 
         $this->assertInstanceOf(DocCheckUser::class, $user);
-        $this->assertEquals(1, $user->getId());
-        $this->assertEquals("web@redsnapper.net", $user->getEmail());
-        $this->assertEquals(33, $user->getOccupationDisciplineId());
-        $this->assertEquals(44, $user->getOccupationProfessionId());
-        $this->assertEquals(55, $user->getOccupationProfessionParentId());
+        $this->assertSame('c2533d51-4dfe-4531-bc83-9bf62e1915e3', $user->getId());
+        $this->assertSame('Micha Muster', $user->getName());
+        $this->assertSame('test@example.com', $user->getEmail());
+        $this->assertSame(387, $user->getOccupationDisciplineId());
+        $this->assertSame(100032, $user->getOccupationProfessionId());
     }
 
-    /** @test */
-    public function can_retrieve_basic_user_when_agreement_not_given()
+    #[Test]
+    public function it_handles_anonymous_payload_with_only_unique_id(): void
     {
-        $request = new Request(['state' => 'state', 'dc_agreement' => 0, 'uniquekey' => 1]);
+        $provider = $this->makeProvider(['state' => 'matching-state'], sessionState: 'matching-state');
+        $provider->setHttpClient($this->mockGuzzleForUser([
+            'unique_id' => '841f41d1-59b5-45fe-b716-8e45f9d58a40',
+        ]));
+
+        $user = $provider->user();
+
+        $this->assertSame('841f41d1-59b5-45fe-b716-8e45f9d58a40', $user->getId());
+        $this->assertNull($user->getName());
+        $this->assertNull($user->getEmail());
+        $this->assertNull($user->getOccupationDisciplineId());
+        $this->assertNull($user->getOccupationProfessionId());
+    }
+
+    #[Test]
+    public function it_handles_partial_payload_when_optional_scopes_declined(): void
+    {
+        $provider = $this->makeProvider(['state' => 'matching-state'], sessionState: 'matching-state');
+        $provider->setHttpClient($this->mockGuzzleForUser([
+            'unique_id' => 'partial-uuid',
+            'email' => 'partial@example.com',
+        ]));
+
+        $user = $provider->user();
+
+        $this->assertSame('partial-uuid', $user->getId());
+        $this->assertSame('partial@example.com', $user->getEmail());
+        $this->assertNull($user->getName());
+        $this->assertNull($user->getOccupationDisciplineId());
+        $this->assertNull($user->getOccupationProfessionId());
+    }
+
+    #[Test]
+    public function it_returns_a_single_name_when_only_first_name_is_present(): void
+    {
+        $provider = $this->makeProvider(['state' => 'matching-state'], sessionState: 'matching-state');
+        $provider->setHttpClient($this->mockGuzzleForUser([
+            'unique_id' => 'first-only-uuid',
+            'first_name' => 'Micha',
+        ]));
+
+        $user = $provider->user();
+
+        $this->assertSame('Micha', $user->getName());
+    }
+
+    private function makeProvider(array $requestParams = [], ?string $sessionState = null): Provider
+    {
+        $request = new Request($requestParams);
         $session = $this->app->make('session')->driver('array');
-        $session->put('state', 'state');
+        if ($sessionState !== null) {
+            $session->put('state', $sessionState);
+        }
         $request->setLaravelSession($session);
 
+        return new Provider($request, 'test-client-id', 'test-client-secret', 'http://localhost/callback');
+    }
 
+    private function mockGuzzleForUser(array $userData): Client
+    {
         $accessTokenResponse = $this->mock(ResponseInterface::class);
         $accessTokenResponse->allows('getBody')->andReturns(
             Utils::streamFor(json_encode(['access_token' => 'fake-token']))
         );
 
+        $userResponse = $this->mock(ResponseInterface::class);
+        $userResponse->allows('getBody')->andReturns(Utils::streamFor(json_encode($userData)));
+
         $guzzle = $this->mock(Client::class);
         $guzzle->expects('post')->andReturns($accessTokenResponse);
+        $guzzle->expects('get')
+            ->withArgs(function (string $url, array $options): bool {
+                return $url === 'https://auth.doccheck.com/api/users/data'
+                    && ($options['headers']['Authorization'] ?? null) === 'Bearer fake-token'
+                    && ($options['headers']['Accept'] ?? null) === 'application/json';
+            })
+            ->andReturns($userResponse);
 
-        $provider = new Provider($request, 'client_id', 'client_secret', 'redirect');
-
-        $provider->setHttpClient($guzzle);
-
-        $user = $provider->user();
-
-        $this->assertInstanceOf(User::class, $user);
-        $this->assertEquals(1, $user->getId());
-        $this->assertNull($user->getEmail());
+        return $guzzle;
     }
 }
