@@ -61,6 +61,26 @@ The package always requests the `unique_id` scope (DocCheck's mandatory system s
 
 After authentication, the user payload uses DocCheck's v2 keys (`unique_id`, `first_name`, `last_name`, `email`, `discipline_id`, `profession_id`). Declined optional scopes are simply omitted from the response — the package's accessors return `null` cleanly in that case.
 
+### Handling authorization errors
+
+DocCheck can redirect back to your callback URL with an OAuth 2.0 error response (`?error=…&error_description=…`) — for example `R0100_PROFESSION_NOT_ALLOWED` when the user's profession isn't on the login-client's whitelist. The package surfaces this as a typed `DocCheckAuthorizationException` from `->user()`:
+
+```php
+use RedSnapper\SocialiteProviders\DocCheck\DocCheckAuthorizationException;
+
+try {
+    $user = Socialite::driver('doccheck')->user();
+} catch (DocCheckAuthorizationException $e) {
+    // $e->error            e.g. 'R0100_PROFESSION_NOT_ALLOWED' or 'access_denied'
+    // $e->errorDescription human-readable text from DocCheck, may be null
+    return redirect()->route('login')->withErrors([
+        'doccheck' => __('auth.doccheck.not_eligible'),
+    ]);
+}
+```
+
+DocCheck shows its own branded error page before redirecting, so the user already knows roughly what happened — your handler just needs to land them somewhere coherent. The package deliberately does not enumerate DocCheck's error codes; branch on `$e->error` in your application as needed.
+
 ### Upgrading from v1
 
 v2 is a breaking change. v1 endpoints (`login.doccheck.com`) are being decommissioned by DocCheck on 2026-06-01. If your application is not yet ready to migrate, lock to `^1.0` — the `v1.x` tags remain available.

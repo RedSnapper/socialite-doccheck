@@ -7,6 +7,7 @@ use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
 use Psr\Http\Message\ResponseInterface;
+use RedSnapper\SocialiteProviders\DocCheck\DocCheckAuthorizationException;
 use RedSnapper\SocialiteProviders\DocCheck\DocCheckUser;
 use RedSnapper\SocialiteProviders\DocCheck\Provider;
 
@@ -106,6 +107,40 @@ class ProviderTest extends TestCase
         $this->assertNull($user->getName());
         $this->assertNull($user->getOccupationDisciplineId());
         $this->assertNull($user->getOccupationProfessionId());
+    }
+
+    #[Test]
+    public function it_throws_when_callback_returns_an_oauth_error_with_description(): void
+    {
+        $provider = $this->makeProvider([
+            'error' => 'R0100_PROFESSION_NOT_ALLOWED',
+            'error_description' => 'Your profession Non-medical professions is not allowed for this login.',
+        ]);
+
+        try {
+            $provider->user();
+            $this->fail('Expected DocCheckAuthorizationException to be thrown.');
+        } catch (DocCheckAuthorizationException $e) {
+            $this->assertSame('R0100_PROFESSION_NOT_ALLOWED', $e->error);
+            $this->assertSame(
+                'Your profession Non-medical professions is not allowed for this login.',
+                $e->errorDescription
+            );
+        }
+    }
+
+    #[Test]
+    public function it_throws_when_callback_returns_an_oauth_error_without_description(): void
+    {
+        $provider = $this->makeProvider(['error' => 'access_denied']);
+
+        try {
+            $provider->user();
+            $this->fail('Expected DocCheckAuthorizationException to be thrown.');
+        } catch (DocCheckAuthorizationException $e) {
+            $this->assertSame('access_denied', $e->error);
+            $this->assertNull($e->errorDescription);
+        }
     }
 
     #[Test]
