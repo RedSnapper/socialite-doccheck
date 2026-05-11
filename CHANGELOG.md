@@ -2,6 +2,18 @@
 
 All notable changes to `doccheck` will be documented in this file.
 
+## 2.1.0 - 2026-05-11
+
+### Added
+
+- `DocCheckAuthorizationException` thrown from `Provider::user()` when DocCheck redirects back to the callback URL with an OAuth 2.0 error response (`?error=…&error_description=…`, per [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1)). Exposes the raw `error` code and optional `errorDescription` so consumers can branch on the failure reason — e.g. DocCheck's undocumented `R0100_PROFESSION_NOT_ALLOWED` when the user's profession isn't on the login-client's whitelist.
+
+Previously this case fell through to the token exchange and surfaced as an opaque Guzzle `BadResponseException`. Existing happy-path behaviour is unchanged.
+
+### Changed
+
+- `composer.json` PHP constraint bumped from `^8.0` to `^8.1`. The new exception uses readonly promoted properties (8.1+). This matches the effective floor that was already enforced transitively by `socialiteproviders/manager: ~4.0` (which requires PHP 8.1) — no consumer who could install v2.0 is excluded by this change.
+
 ## 2.0.0 - 2026-05-07
 
 Migration to DocCheck's new OAuth 2.0 endpoints (`auth.doccheck.com`). v1 is preserved on the `v1.x` tags for legacy consumers.

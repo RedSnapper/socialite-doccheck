@@ -15,6 +15,18 @@ class Provider extends AbstractProvider
 
     protected $scopeSeparator = ' ';
 
+    public function user()
+    {
+        if ($this->request->filled('error')) {
+            throw new DocCheckAuthorizationException(
+                error: (string) $this->request->input('error'),
+                errorDescription: $this->request->input('error_description'),
+            );
+        }
+
+        return parent::user();
+    }
+
     protected function getAuthUrl($state): string
     {
         $lang = Arr::pull($this->parameters, 'lang', 'en');
